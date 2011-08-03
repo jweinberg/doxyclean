@@ -120,6 +120,11 @@ table#metadata ul.inheritance li:last-of-type:after {
 	margin: 0.4em 0 1.0em 0;
 }
 
+ul.tooltipRegion li code {
+	font-size: 100%;
+	font-family: Courier,Consolas,monospace;
+}
+
 code {
 	font-family: Menlo, Monaco, 'Courier New', Courier, monospace;
 	font-size: 1.1em;
