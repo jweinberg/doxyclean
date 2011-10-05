@@ -45,6 +45,14 @@ def _mkdir(newdir):
         if tail:
             os.mkdir(newdir)
 
+def tokenTypeForMemberType(memberType):
+	if memberType == 'class-method':
+		return 'intfcm'
+	elif memberType == 'instance-method':
+		return 'intfm'
+	elif memberType == 'property':
+		return 'intfp'
+	
 def longestToShortestCompare(x, y):
 	if len(x) > len(y):
 		return -1
@@ -88,6 +96,55 @@ def typeForFile(filePath):
 		
 	xmlDoc = minidom.parse(filePath)
 	return xmlDoc.getElementsByTagName("object")[0].attributes["kind"].value
+
+def createTokensXML(directory):
+	outputPath = os.path.join(directory, "Tokens.xml")
+	tokensXML = minidom.Document()
+	
+	nodeOutputPath = os.path.join(directory, "Nodes.xml")
+	nodesXML = minidom.Document()
+	
+	
+	tokensElement = tokensXML.createElement("Tokens")
+	tokensElement.setAttribute("version", "1.0")
+	tokensXML.appendChild(tokensElement)
+	
+	for (path, dirs, files) in os.walk(directory):
+		for fileName in files:
+			# Only look at XML files
+			if not os.path.splitext(fileName)[1] == ".xml":
+				continue
+			if fileName == 'index.xml':
+				continue
+			if verbose:
+				print "Tokenizing " + os.path.join(path, fileName)
+			cleanXML = minidom.parse(os.path.join(path, fileName))
+			nodeName = cleanXML.getElementsByTagName("object")[0].firstChild.firstChild.nodeValue
+			print nodeName
+			members = cleanXML.getElementsByTagName('member')
+			for member in members:
+				tokenElement = tokensXML.createElement("Token")
+				nameElement = tokensXML.createElement("Name")
+				nameElement.appendChild(tokensXML.createTextNode(member.getElementsByTagName("name")[0].firstChild.nodeValue))
+				tokenElement.appendChild(nameElement)
+				typeElement = tokensXML.createElement("Type")
+				typeElement.appendChild(tokensXML.createTextNode(tokenTypeForMemberType(member.attributes["kind"].value)))
+				tokenElement.appendChild(typeElement)
+				
+				scopeElement = tokensXML.createElement("Scope")
+				scopeElement.appendChild(tokensXML.createTextNode(nodeName))
+				print scopeElement.childNodes
+				tokenElement.appendChild(scopeElement)
+				
+				tokensElement.appendChild(tokenElement)
+			
+	# Write the index file
+	f = open(outputPath, "w")
+	tokensXML.writexml(f, "", "\t", "\n")
+	f.close()
+	
+	
+	
 
 def cleanXML(filePath, outputDirectory):
 	if not fileIsDocumented(filePath):
@@ -135,7 +192,7 @@ def createIndexXML(directory):
 	for (path, dirs, files) in os.walk(directory):
 		for fileName in files:
 			# Only look at XML files
-			if not os.path.splitext(fileName)[1] == ".xml":
+			if fileName == 'Tokens.xml' or not os.path.splitext(fileName)[1] == ".xml":
 				continue
 			
 			# Get information about the file
@@ -171,7 +228,7 @@ def linkify(directory, shouldEstablishIPhoneLinks):
 	for (path, dirs, files) in os.walk(directory):
 		for fileName in files:
 			# Skip the index and any non-xml files
-			if fileName == "index.xml" or not os.path.splitext(fileName)[1] == ".xml":
+			if fileName == "Tokens.xml" or fileName == "index.xml" or not os.path.splitext(fileName)[1] == ".xml":
 				continue
 			
 			filePath = os.path.join(path, fileName)
@@ -1136,6 +1193,7 @@ def main(argv=None):
 	optionParser.add_option("-x", "--xml", action="store_false", dest="makeHTML", default=True, help="Only generate XML. If this flag is not set, both XML and HTML will be generated")
 	optionParser.add_option("-p", "--phone", action="store_true", dest="shouldEstablishIPhoneLinks", default=False, help="Establish links to Apple's iPhone framework documentation, rather than to Mac frameworks")
 	optionParser.add_option("-v", "--verbose", action="store_true", dest="verbose", default=False, help="Show detailed information")
+	optionParser.add_option("-d", "--docset", action="store_true", dest="makeDocset", default=False, help="Generate an Xcode docset")
 	(options, args) = optionParser.parse_args(argv[1:])
 
 	verbose = options.verbose
@@ -1170,11 +1228,18 @@ def main(argv=None):
 			filePath = os.path.join(options.inputDirectory, fileName)
 			cleanXML(filePath, xmlOutputDirectory)
 
+	# Generate a clean Tokens reference
+	if options.makeDocset:
+		if verbose:
+			print "Creating Docset XML Files"
+		createTokensXML(xmlOutputDirectory)
+
 	# Create the index file
 	if verbose:
 		print "Creating index.xml"
 	indexPath = createIndexXML(xmlOutputDirectory)
 	
+
 	# Establish inter-file links
 	if verbose:
 		print "Establishing links:"
@@ -1206,7 +1271,7 @@ def main(argv=None):
 		# Copy the CSS files over to the new path
 		cssPath = sys.path[0] + '/css'
 		os.system("cp -R \"%s\" \"%s\"" % (cssPath, htmlOutputDirectory))
-			
+	
 	# Set the project name where necessary
 	if verbose:
 		print "Setting project name"
